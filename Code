@@ -1,0 +1,368 @@
+from math import log,sqrt
+import numpy as np
+from numpy.polynomial import polynomial
+from random import randint,randrange
+
+# ALGO NAIF
+def decomposition(N):
+    L=[]
+    n=0
+    while N%2==0:
+        N=N//2
+        n+=1
+    if n>0:
+        L.append((2,n))
+    p=3
+    while N>=p**2:
+        n=0
+        while N%p==0:
+            n+=1
+            N=N//p
+        if n>0:
+            L.append((p,n))
+        p+=2
+    if N>1:
+        L.append((N,1))
+    return L
+
+def est_premier(N):
+    return decomposition(N)==[(N,1)]
+
+# -----------------------------------------------------------------------------------------
+# TEST DE FERMAT
+
+def exp_mod(x,n,p):
+    z=1
+    y=x
+    m=n
+    while m>0:
+        if m%2==1:
+            z=(z*y)%p
+        m=m//2
+        y=(y**2)%p
+    return z%p
+
+def est_fermat(N,a):
+    return exp_mod(a,N-1,N)==1
+
+def est_premier_pgp(N):
+    for a in [2,3,5,7]:
+        if not(est_fermat(N,a)):
+            return False
+    return True
+
+# -----------------------------------------------------------------------------------------
+# MILLER-RABIN
+
+def temoin(N,a,m,s):
+    am=exp_mod(a,m,N)
+    if am==1:
+        return False
+    for i in range(s):
+        if am==N-1:
+            return False
+        am=(am**2)%N
+    return True
+
+def miller_rabin(N):
+    m=N-1
+    s=0
+    while m%2==0:
+        m=m/2
+        s+=1
+    for i in range(30):
+        a=randint(1,N-1)
+        if temoin(N,a,m,s):
+            return False
+    return True
+
+# -----------------------------------------------------------------------------------------
+# ALGO AKS
+
+def pgcd(a,b):
+    if b==0:
+        return a
+    else:
+        r=a%b
+        return pgcd(b,r)
+
+def o(r,n):
+    if pgcd(r,n)!=1:
+        return -10
+    else:
+        k=1
+        while (n**k)%r!=1:
+            k+=1
+        return k
+
+def phi(r):
+    s=0
+    for i in range(1,r+1):
+        if pgcd(i,r)==1:
+            s+=1
+    return s
+
+def expo_rapide(P,n,r):
+    Q=1
+    m=n
+    while m>0:
+        if m%2==0:
+            m=m/2
+            P=polynomial.polymul(P,P)
+            x = np.nonzero(Q)[0]
+            for i in x[x>=r]:
+                if P[i] != 0:
+                    P[i % r] += P[i]
+                    P[i] = 0
+            P = P%n
+        else:
+            m=m-1
+            Q=polynomial.polymul(Q,P)
+            x = np.nonzero(Q)[0]
+            for i in x[x>=r]:
+                if Q[i] != 0:
+                    Q[i % r] += Q[i]
+                    Q[i] = 0
+            Q = Q % n
+            m = m / 2
+            P = polynomial.polymul(P, P)
+            x = np.nonzero(Q)[0]
+            for i in x[x>=r]:
+                if P[i] != 0:
+                    P[i % r] += P[i]
+                    P[i] = 0
+            P = P%n
+    return Q
+
+
+
+def prime(n):
+    if n<=1:
+        return False
+    for b in range(2,int(log(n))+1):
+        if (n**(1/b))%1==0:
+            return False
+    r=2
+    l=log(n)**2
+    while o(r,n)<=4*l:
+        r+=1
+    for a in range(2,r+1):
+        p=pgcd(a,n)
+        if p>1 and p<n:
+            return False
+    if n<=r:
+        return True
+    for a in range(1,int(2*sqrt(phi(r))*log(n))+1):
+        P = [a, 1]
+        M = np.zeros(r+1)
+        M[0] = -1
+        M[r] = 1
+        Pn = expo_rapide(P, n, r)
+        Q = np.zeros(len(Pn))
+        Q[n % r] = 1
+        Q[0] = a
+        for i in range(len(Pn)):
+            if Pn[i]!=Q[i]:
+                return False
+    return True
+
+# -----------------------------------------------------------------------------------------
+# GENERER GRAND NOMBRE PREMIER
+
+def grand_premier():
+    n=2**1023-1
+    i=0
+    while not(est_premier_pgp(n)):
+        n=randint(2**1022-1,2**1023-1)
+        n=n*2+1
+        i+=1
+        print(i)
+    return n
+
+def millerrabin(n, k):
+
+    # Implementation uses the Miller-Rabin Primality Test
+    # The optimal number of rounds for this test is 40
+    # See http://stackoverflow.com/questions/6325576/how-many-iterations-of-rabin-miller-should-i-use-for-cryptographic-safe-primes
+    # for justification
+
+    # If number is even, it's a composite number
+
+    if n == 2:
+        return True
+
+    if n % 2 == 0:
+        return False
+
+    r, s = 0, n - 1
+    while s % 2 == 0:
+        r += 1
+        s //= 2
+    for _ in range(k):
+        a = randrange(2, n - 1)
+        x = pow(a, s, n)
+        if x == 1 or x == n - 1:
+            continue
+        for _ in range(r - 1):
+            x = pow(x, 2, n)
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
+
+import matplotlib.pyplot as plt
+from time import clock
+
+def comparaison():
+    X=[8191,131071,524287]
+    Yn=[]
+    Yf=[]
+    Ymr=[]
+    Yaks=[]
+    tn=0
+    tf=0
+    tmr=0
+    taks=0
+    for i in X:
+        print(i)
+        t=clock()
+        est_premier(i)
+        t=clock()-t
+        Yn.append(t)
+        t=clock()
+        est_premier_pgp(i)
+        t=clock()-t
+        Yf.append(t)
+        t=clock()
+        miller_rabin(i)
+        t=clock()-t
+        Ymr.append(t)
+        t=clock()
+        prime(i)
+        t=clock()-t
+        Yaks.append(t)
+    plt.plot(X,Yn,label="Algorithme naïf")
+    plt.plot(X,Yf,label="Fermat")
+    plt.plot(X,Ymr,label="Test de Miller-Rabin")
+    plt.plot(X,Yaks,label="AKS")
+    plt.legend(loc="upper left")
+    plt.title(label="Comparaison entre l'algorithme naïf et le test de Miller-Rabin")
+    plt.xlabel("Nombre testé")
+    plt.ylabel("Temps")
+    plt.show()
+
+def naif(n1,n2):
+    X=[log(i) for i in range(n1,n2)]
+    Yn=[]
+    for i in range(n1,n2):
+        t=clock()
+        est_premier(i)
+        t=clock()-t
+        Yn.append(log(t))
+    plt.plot(X,Yn,label="Algorithme naïf")
+    plt.legend(loc="upper left")
+    plt.xlabel("log(n)")
+    plt.ylabel("log(t)")
+    plt.show()
+
+def mr(n1,n2):
+    X=[log(i) for i in range(n1,n2)]
+    Y=[]
+    tmr=0
+    for i in range(n1,n2):
+        t=clock()
+        miller_rabin(i)
+        t=clock()-t
+        tmr+=t
+        Y.append(tmr)
+    plt.plot(X,Y,label="Algorithme naïf")
+    plt.legend(loc="upper left")
+    plt.xlabel("log(n)")
+    plt.ylabel("log(t)")
+    plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# -----------------------------------------------------------------------------------------
+# RSA
+
+n1=163962330239676456658622056277773643373066937349204330593050418974648745909943735879760868069445169273095197962815696894011513534629936601307068990178904370012689181874642074635095088026938339396202385835880730528858985918839294290138335681514930930242238081706894622208410109360832298176134746656294591383323
+n2=161075086189468066192187481889993490903167168318319730386345454070613020052216197378737166653811638826907660686360415661911657040203918797401322804809551911576036018873869191089258172069533470155604968493889630399846428482801913510185830491412232118595422573651455118034796873516941460171675790350593849753837
+n3=154207974927080966237945999345987207846258608886032301979030727162987006259403956627998094906837312912005252924081668558983750906449866500585144366114152255862669902240822928523495975453678809851989175402574009897093130097310073309370768530467738359129354686046366388106323898638499745846231412079734008887019
+
+n=n1*n2
+np=(n1-1)*(n2-1)
+d=randint(1,10**20)
+while pgcd(d,np)!=1:
+    d+=1
+# print(d)
+d=61370507431255658771
+def euclide_etendu(a0,b0):
+    a=a0
+    b=b0
+    u=1
+    v=0
+    w=0
+    z=1
+    while b!=0:
+        q=a//b
+        b,a=a%b,b
+        u,v,w,z= w,z,(u-w*q), (v-z*q)
+    return v
+e=euclide_etendu(np,d)%np
+e=22755373384689527493779103104797217698535967746793531315118015166570760585672209660549479992725975416392124067428968946102325645068466616330108421278480735215125061911000676716706140864904050326073733128847835945439477808747505032827732953457274357084620729476920120039324347303188491285305072376736183081542633140793684005025239043544528365876192722075047253379333428583360735855982459338979244040885140292986468425808776073398102974378228292444648845443846452520354000084218324515873374961144965152392684264753394419099735261303753600051252372278224191087457463841706147995240755008680586185318968238927040525603107
+# print(e)
+def lpowmod(x, y, n):
+    """puissance modulaire: (x**y)%n avec x, y et n entiers"""
+    result = 1
+    while y>0:
+        if y&1>0:
+            result = (result*x)%n
+        y >>= 1
+        x = (x*x)%n
+    return result
+def sb(L):
+    M=[]
+    for i in range(len(L)):
+        M.append(lpowmod(L[i],e,n))
+    return M
+
+def pb(L):
+    M=[]
+    for i in range(len(L)):
+        M.append(lpowmod(L[i],d,n))
+    return M
+def coder(c):
+    L=[]
+    for i in range(len(c)):
+        L.append(ord(c[i]))
+    return pb(L)
+def decoder(L):
+    M=sb(L)
+    c=""
+    for i in range(len(M)):
+        c+=chr(M[i])
+    return c
+
+import numpy as np
